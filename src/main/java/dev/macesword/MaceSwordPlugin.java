@@ -125,7 +125,7 @@ public final class MaceSwordPlugin extends JavaPlugin implements Listener {
             Enchantment.SHARPNESS, Enchantment.SMITE, Enchantment.BANE_OF_ARTHROPODS,
             Enchantment.FIRE_ASPECT, Enchantment.LOOTING, Enchantment.SWEEPING_EDGE,
             Enchantment.KNOCKBACK, Enchantment.UNBREAKING,
-            Enchantment.DENSITY, Enchantment.BREACH, Enchantment.WIND_BURST
+            Enchantment.DENSITY, Enchantment.BREACH
     );
 
     private final Map<UUID, Integer> enchantCount = new HashMap<>();
@@ -136,7 +136,8 @@ public final class MaceSwordPlugin extends JavaPlugin implements Listener {
     }
 
     private static int levelFor(Enchantment ench, int cost) {
-        int max = ench.getMaxLevel();
+        // Table only: no Sharpness V (still possible with books in an anvil)
+        int max = ench.equals(Enchantment.SHARPNESS) ? 4 : ench.getMaxLevel();
         int lvl = (int) Math.round(cost / 30.0 * max);
         return Math.max(1, Math.min(max, lvl));
     }
@@ -242,7 +243,11 @@ public final class MaceSwordPlugin extends JavaPlugin implements Listener {
         AnvilInventory inv = e.getInventory();
         ItemStack left = inv.getFirstItem();
         ItemStack right = inv.getSecondItem();
-        if (!isMaceSword(left) || right == null || right.getType().isAir()) return;
+        if (!isMaceSword(left)) {
+            guardVanilla(e, left);
+            return;
+        }
+        if (right == null || right.getType().isAir()) return;
 
         Map<Enchantment, Integer> incoming = new HashMap<>();
         if (right.getItemMeta() instanceof EnchantmentStorageMeta book) {
@@ -277,6 +282,31 @@ public final class MaceSwordPlugin extends JavaPlugin implements Listener {
         result.setItemMeta(meta);
         e.setResult(result);
         e.getView().setRepairCost(Math.min(39, Math.max(1, cost)));
+    }
+
+    /** Normal maces and swords stay vanilla: block any anvil result with enchants they can't normally have. */
+    private void guardVanilla(PrepareAnvilEvent e, ItemStack left) {
+        if (left == null) return;
+        Material type = left.getType();
+        if (type != Material.MACE && !type.name().endsWith("_SWORD")) return;
+        ItemStack result = e.getResult();
+        if (result == null || result.getType() != type) return;
+
+        ItemStack plain = new ItemStack(type);
+        List<Enchantment> list = new ArrayList<>(result.getEnchantments().keySet());
+        for (int i = 0; i < list.size(); i++) {
+            Enchantment a = list.get(i);
+            if (!a.canEnchantItem(plain)) {
+                e.setResult(null);
+                return;
+            }
+            for (int j = i + 1; j < list.size(); j++) {
+                if (a.conflictsWith(list.get(j))) {
+                    e.setResult(null);
+                    return;
+                }
+            }
+        }
     }
 
     @Override
