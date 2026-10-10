@@ -14,6 +14,9 @@ import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.enchantments.EnchantmentOffer;
+import org.bukkit.event.enchantment.EnchantItemEvent;
+import org.bukkit.event.enchantment.PrepareItemEnchantEvent;
 import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
@@ -28,7 +31,12 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Random;
+import java.util.UUID;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -111,6 +119,80 @@ public final class MaceSwordPlugin extends JavaPlugin implements Listener {
             Set.of(Enchantment.BREACH, Enchantment.DENSITY),
             Set.of(Enchantment.SHARPNESS, Enchantment.SMITE, Enchantment.BANE_OF_ARTHROPODS)
     );
+
+    /** Enchants the enchanting table can roll on the Mace Sword (sword + mace). */
+    private static final List<Enchantment> TABLE_POOL = List.of(
+            Enchantment.SHARPNESS, Enchantment.SMITE, Enchantment.BANE_OF_ARTHROPODS,
+            Enchantment.FIRE_ASPECT, Enchantment.LOOTING, Enchantment.SWEEPING_EDGE,
+            Enchantment.KNOCKBACK, Enchantment.UNBREAKING,
+            Enchantment.DENSITY, Enchantment.BREACH, Enchantment.WIND_BURST
+    );
+
+    private final Map<UUID, Integer> enchantCount = new HashMap<>();
+
+    private long seed(Player p, int button, int cost) {
+        int n = enchantCount.getOrDefault(p.getUniqueId(), 0);
+        return p.getUniqueId().getMostSignificantBits() ^ (n * 7919L) ^ (button * 131L) ^ (cost * 1000003L);
+    }
+
+    private static int levelFor(Enchantment ench, int cost) {
+        int max = ench.getMaxLevel();
+        int lvl = (int) Math.round(cost / 30.0 * max);
+        return Math.max(1, Math.min(max, lvl));
+    }
+
+    private static boolean conflicts(Map<Enchantment, Integer> present, Enchantment ench) {
+        for (Set<Enchantment> group : EXCLUSIVE_GROUPS) {
+            if (!group.contains(ench)) continue;
+            for (Enchantment other : group) {
+                if (!other.equals(ench) && present.containsKey(other)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** Rolls sword + mace enchants for the table. The first entry is the one shown as the hint. */
+    private static Map<Enchantment, Integer> rollEnchants(Random r, int cost) {
+        List<Enchantment> pool = new ArrayList<>(TABLE_POOL);
+        Collections.shuffle(pool, r);
+        Map<Enchantment, Integer> out = new LinkedHashMap<>();
+        out.put(pool.get(0), levelFor(pool.get(0), cost));
+        double chance = (cost + 1) / 50.0;
+        for (Enchantment c : pool.subList(1, pool.size())) {
+            if (r.nextDouble() >= chance) break;
+            if (conflicts(out, c)) continue;
+            out.put(c, levelFor(c, cost));
+            chance /= 2;
+        }
+        return out;
+    }
+
+    /** Enchanting table previews for the Mace Sword only. */
+    @EventHandler
+    public void onPrepareEnchant(PrepareItemEnchantEvent e) {
+        if (!isMaceSword(e.getItem())) return;
+        EnchantmentOffer[] offers = e.getOffers();
+        for (int i = 0; i < offers.length; i++) {
+            EnchantmentOffer offer = offers[i];
+            if (offer == null || offer.getCost() <= 0) continue;
+            Map<Enchantment, Integer> roll = rollEnchants(
+                    new Random(seed(e.getEnchanter(), i, offer.getCost())), offer.getCost());
+            Enchantment first = roll.keySet().iterator().next();
+            offer.setEnchantment(first);
+            offer.setEnchantmentLevel(roll.get(first));
+        }
+    }
+
+    /** Applies sword + mace enchants when enchanting the Mace Sword at a table. */
+    @EventHandler
+    public void onEnchant(EnchantItemEvent e) {
+        if (!isMaceSword(e.getItem())) return;
+        Player p = e.getEnchanter();
+        Map<Enchantment, Integer> add = e.getEnchantsToAdd();
+        add.clear();
+        add.putAll(rollEnchants(new Random(seed(p, e.whichButton(), e.getExpLevelCost())), e.getExpLevelCost()));
+        enchantCount.merge(p.getUniqueId(), 1, Integer::sum);
+    }
 
     private static boolean conflicts(ItemMeta meta, Enchantment ench) {
         for (Set<Enchantment> group : EXCLUSIVE_GROUPS) {
