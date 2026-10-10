@@ -1,0 +1,13 @@
+name: MaceSword
+version: 1.0.0
+main: dev.macesword.MaceSwordPlugin
+api-version: "26.2"
+description: Adds the Mace Sword, a mace that looks like a netherite sword and accepts sword + mace enchants.
+commands:
+  macesword:
+    description: Give yourself (or a player) a Mace Sword
+    usage: /macesword [player]
+    permission: macesword.give
+permissions:
+  macesword.give:
+    default: op
