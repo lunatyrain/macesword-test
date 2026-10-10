@@ -65,7 +65,7 @@ public final class MaceSwordPlugin extends JavaPlugin implements Listener {
 
         ShapedRecipe recipe = new ShapedRecipe(recipeKey, createMaceSword());
         recipe.shape(" M ", "SCS", " D ");
-        recipe.setIngredient('M', Material.MACE);
+        recipe.setIngredient('M', Material.HEAVY_CORE);
         recipe.setIngredient('S', Material.ANCIENT_DEBRIS);
         recipe.setIngredient('C', Material.DRAGON_EGG);
         recipe.setIngredient('D', Material.DIAMOND_SWORD);
