@@ -21,6 +21,7 @@ import org.bukkit.event.entity.EntityCombustEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
+import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.AnvilInventory;
 import org.bukkit.inventory.EquipmentSlotGroup;
@@ -70,6 +71,9 @@ public final class MaceSwordPlugin extends JavaPlugin implements Listener {
         recipe.setIngredient('C', Material.DRAGON_EGG);
         recipe.setIngredient('D', Material.DIAMOND_SWORD);
         Bukkit.addRecipe(recipe);
+
+        // Block the regular mace craft (heavy core + breeze rod)
+        Bukkit.removeRecipe(NamespacedKey.minecraft("mace"));
 
         // Unlock for anyone already online (e.g. plugin added while the server was running)
         for (Player online : Bukkit.getOnlinePlayers()) {
@@ -227,6 +231,15 @@ public final class MaceSwordPlugin extends JavaPlugin implements Listener {
     public void onItemCombust(EntityCombustEvent e) {
         if (e.getEntity() instanceof Item drop && isMaceSword(drop.getItemStack())) {
             e.setCancelled(true);
+        }
+    }
+
+    /** Backup: nothing in a crafting grid may produce a normal mace; only the Mace Sword recipe can. */
+    @EventHandler
+    public void onPrepareCraft(PrepareItemCraftEvent e) {
+        ItemStack result = e.getInventory().getResult();
+        if (result != null && result.getType() == Material.MACE && !isMaceSword(result)) {
+            e.getInventory().setResult(null);
         }
     }
 
